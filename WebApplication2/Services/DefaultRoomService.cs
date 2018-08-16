@@ -23,21 +23,33 @@ namespace WebApplication2.Services
         {
             var entity = await _context.Rooms.SingleOrDefaultAsync(r => r.Id == id, ct);
             if (entity == null) return null;
-            return Mapper.Map<Room>(entity);
-            /*var resource = new Room
-            {
-                Href = null, // Url.Link(nameof(GetRoomByIdAsync), new { roomId = entity.Id }),
-                Name = entity.Name,
-                Rate = entity.Rate / 100.0m
-            };
 
-            return resource;*/
+            return Mapper.Map<Room>(entity);
         }
 
-        public async Task<IEnumerable<Room>> GetRoomsAsync(CancellationToken ct)
+        public async Task<PagedResults<Room>> GetRoomsAsync(
+            PagingOptions pagingOptions,
+            SortOptions<Room, RoomEntity> sortOptions,
+            SearchOptions<Room, RoomEntity> searchOptions,
+            CancellationToken ct)
         {
-            var query = _context.Rooms.ProjectTo<Room>();
-            return await query.ToArrayAsync();
+            IQueryable<RoomEntity> query = _context.Rooms;
+            query = searchOptions.Apply(query);
+            query = sortOptions.Apply(query);
+
+            var size = await query.CountAsync(ct);
+
+            var items = await query
+                .Skip(pagingOptions.Offset.Value)
+                .Take(pagingOptions.Limit.Value)
+                .ProjectTo<Room>()
+                .ToArrayAsync(ct);
+
+            return new PagedResults<Room>
+            {
+                Items = items,
+                TotalSize = size
+            };
         }
     }
 }

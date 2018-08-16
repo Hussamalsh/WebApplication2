@@ -1,4 +1,5 @@
 ﻿using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -22,11 +23,13 @@ namespace WebApplication2.Services
 
         public async Task<PagedResults<Opening>> GetOpeningsAsync(
             PagingOptions pagingOptions,
+            SortOptions<Opening, OpeningEntity> sortOptions,
+            SearchOptions<Opening, OpeningEntity> searchOptions,
             CancellationToken ct)
         {
             var rooms = await _context.Rooms.ToArrayAsync();
 
-            var allOpenings = new List<Opening>();
+            var allOpenings = new List<OpeningEntity>();
 
             foreach (var room in rooms)
             {
@@ -38,8 +41,8 @@ namespace WebApplication2.Services
 
                 var conflictedSlots = await GetConflictingSlots(
                     room.Id,
-                    allPossibleOpenings.Count() > 0 ? allPossibleOpenings.First().StartAt : new BookingRange() {StartAt = new DateTimeOffset() }.StartAt,
-                    allPossibleOpenings.Count() > 0 ? allPossibleOpenings.Last().EndAt : new BookingRange() { StartAt = new DateTimeOffset() }.StartAt,
+                    allPossibleOpenings.First().StartAt,
+                    allPossibleOpenings.Last().EndAt,
                     ct);
 
                 // Remove the slots that have conflicts and project
@@ -51,20 +54,27 @@ namespace WebApplication2.Services
                         Rate = room.Rate,
                         StartAt = slot.StartAt,
                         EndAt = slot.EndAt
-                    })
-                    .Select(model => Mapper.Map<Opening>(model));
+                    });
 
                 allOpenings.AddRange(openings);
             }
 
-            var pagedOpenings = allOpenings
+            var pseudoQuery = allOpenings.AsQueryable();
+            pseudoQuery = searchOptions.Apply(pseudoQuery);
+            pseudoQuery = sortOptions.Apply(pseudoQuery);
+
+            var size = pseudoQuery.Count();
+
+            var items = pseudoQuery
                 .Skip(pagingOptions.Offset.Value)
-                .Take(pagingOptions.Limit.Value);
+                .Take(pagingOptions.Limit.Value)
+                .ProjectTo<Opening>()
+                .ToArray();
 
             return new PagedResults<Opening>
             {
-                Items = pagedOpenings,
-                TotalSize = allOpenings.Count
+                TotalSize = size,
+                Items = items
             };
         }
 
@@ -74,7 +84,8 @@ namespace WebApplication2.Services
             DateTimeOffset end,
             CancellationToken ct)
         {
-            return await _context.Bookings.Where(b => b.Room.Id == roomId && _dateLogicService.DoesConflict(b, start, end))
+            return await _context.Bookings
+                .Where(b => b.Room.Id == roomId && _dateLogicService.DoesConflict(b, start, end))
                 // Split each existing booking up into a set of atomic slots
                 .SelectMany(existing => _dateLogicService.GetAllSlots(existing.StartAt, existing.EndAt))
                 .ToArrayAsync(ct);

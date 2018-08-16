@@ -31,6 +31,7 @@ namespace WebApplication2.Services
         public IEnumerable<BookingRange> GetAllSlots(DateTimeOffset start, DateTimeOffset? end = null)
         {
             var newStart = AlignStartTime(start);
+
             while (true)
             {
                 if (end != null && newStart >= end) yield break;

@@ -9,7 +9,16 @@ namespace WebApplication2.Services
 {
     public interface IOpeningService
     {
-        Task<PagedResults<Opening>> GetOpeningsAsync(PagingOptions pagingOptions,CancellationToken ct);
-        Task<IEnumerable<BookingRange>> GetConflictingSlots(Guid roomId, DateTimeOffset start,DateTimeOffset end, CancellationToken ct);
+        Task<PagedResults<Opening>> GetOpeningsAsync(
+            PagingOptions pagingOptions,
+            SortOptions<Opening, OpeningEntity> sortOptions,
+            SearchOptions<Opening, OpeningEntity> searchOptions,
+            CancellationToken ct);
+
+        Task<IEnumerable<BookingRange>> GetConflictingSlots(
+            Guid roomId,
+            DateTimeOffset start,
+            DateTimeOffset end,
+            CancellationToken ct);
     }
 }
